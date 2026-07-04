@@ -1,0 +1,8 @@
+{
+  "name": "Remix: SliceMatic",
+  "description": "A high-performance full-stack pizza POS and ordering system equipped with real-time analytics and Gemini AI business intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
