@@ -1,15 +1,24 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Pizza, ShieldAlert, Sparkles, LogOut, ShoppingCart } from 'lucide-react';
+import { useAuth } from '../services/authContext';
 
 export default function Navbar() {
   const location = useLocation();
-  const isAdmin = localStorage.getItem('slicematic_admin_token');
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const isAdmin = !!user;
 
-  const handleLogout = () => {
-    localStorage.removeItem('slicematic_admin_token');
-    localStorage.removeItem('slicematic_admin_user');
-    window.location.href = '/';
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (err) {
+      console.error('Failed to sign out:', err);
+      // Fallback
+      navigate('/');
+    }
   };
+
 
   const isActive = (path: string) => location.pathname === path;
 

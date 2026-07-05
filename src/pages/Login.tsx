@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldAlert, Lock, Mail, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
+import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 export default function Login() {
   const [email, setEmail] = useState('admin@slicematic.com');
@@ -17,21 +18,32 @@ export default function Login() {
     setError('');
 
     try {
-      if (email === 'admin@slicematic.com' && password === 'password123') {
-        localStorage.setItem('slicematic_admin_token', 'mock-jwt-token-slicematic');
-        localStorage.setItem('slicematic_admin_user', JSON.stringify({ email: 'admin@slicematic.com', name: 'Rajan Sharma' }));
-        
-        // Force page reload to sync Navbar state nicely or navigate
-        window.location.href = '/admin/dashboard';
-      } else {
-        throw new Error('Invalid admin credentials. Use admin@slicematic.com and password123.');
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error('Supabase client is not configured. Please define VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
       }
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!data.user) {
+        throw new Error('Authentication failed: no user returned.');
+      }
+
+      console.log('[CLIENT] Supabase Login successful. User:', data.user);
+      navigate('/admin/dashboard');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'An error occurred during sign in.');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-amber-50/40 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
