@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import { Sparkles, HelpCircle, Brain, RefreshCw, BarChart2, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleGenAI } from '@google/genai';
+import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 export default function AIInsights() {
   const [insights, setInsights] = useState('');
@@ -30,22 +32,92 @@ export default function AIInsights() {
     ];
 
     try {
-      const res = await fetch('/api/ai/insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      const data = await res.json();
-      
-      stepIntervals.forEach(clearTimeout);
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch AI insights. Make sure GEMINI_API_KEY is configured.');
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error('Supabase client is not configured.');
       }
 
-      setInsights(data.insights);
+      // Fetch orders and menu directly from Supabase
+      const { data: ordersData, error: ordersErr } = await supabase
+        .from('orders')
+        .select('*, order_items(*)');
+
+      if (ordersErr) {
+        throw new Error(`Failed to fetch orders for AI analysis: ${ordersErr.message}`);
+      }
+
+      const { data: menuData, error: menuErr } = await supabase
+        .from('menu')
+        .select('*');
+
+      if (menuErr) {
+        throw new Error(`Failed to fetch menu for AI analysis: ${menuErr.message}`);
+      }
+
+      const orders = ordersData || [];
+
+      // Gather current sales data to feed the model
+      const totalOrders = orders.length;
+      const totalRevenue = orders.reduce((sum, o) => sum + Number(o.final_total || 0), 0);
+      const totalDiscounts = orders.reduce((sum, o) => sum + Number(o.discount || 0), 0);
+
+      const crustCounts: Record<string, number> = {};
+      const pizzaCounts: Record<string, number> = {};
+      const toppingCounts: Record<string, number> = {};
+      const paymentCounts: Record<string, number> = {};
+
+      orders.forEach((o: any) => {
+        paymentCounts[o.payment_mode] = (paymentCounts[o.payment_mode] || 0) + 1;
+        o.order_items?.forEach((item: any) => {
+          if (item.base_name) crustCounts[item.base_name] = (crustCounts[item.base_name] || 0) + (item.quantity || 1);
+          if (item.pizza_name) pizzaCounts[item.pizza_name] = (pizzaCounts[item.pizza_name] || 0) + (item.quantity || 1);
+          if (item.topping_name) toppingCounts[item.topping_name] = (toppingCounts[item.topping_name] || 0) + (item.quantity || 1);
+        });
+      });
+
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Gemini API key is not configured. Please define VITE_GEMINI_API_KEY in your Vercel environment variables or .env file.');
+      }
+
+      // Initialize the modern @google/genai SDK
+      const ai = new GoogleGenAI({ apiKey });
+
+      const prompt = `
+You are an expert restaurant operations and sales consultant analyzing the POS performance for "SliceMatic Pizza".
+Here is the current restaurant performance data:
+- Total Orders: ${totalOrders}
+- Total Revenue: ₹${totalRevenue.toFixed(2)}
+- Total Discounts Applied: ₹${totalDiscounts.toFixed(2)}
+- Most Popular Crusts/Bases: ${JSON.stringify(crustCounts)}
+- Most Popular Pizzas Ordered: ${JSON.stringify(pizzaCounts)}
+- Most Popular Toppings Added: ${JSON.stringify(toppingCounts)}
+- Preferred Payment Modes: ${JSON.stringify(paymentCounts)}
+
+Please compile a highly professional, strategic, and direct business insights report.
+Your report MUST contain:
+1. **Executive Summary**: A punchy 2-sentence overview of overall sales performance.
+2. **Key Strengths**: Identify what is selling best (favorite pizza combos, high-margin toppings) and why.
+3. **Optimizations & Strategies**: Actionable recommendations (e.g. promoting an underperforming high-margin crust, refining pricing, optimizing prep hours based on trends, target bundles).
+4. **Discount Effectiveness**: Evaluate if the "10% off on 5+ pizzas" bulk promo is encouraging larger orders or reducing margins unnecessarily, with advice on next steps.
+
+Format your response in beautiful, clean Markdown with clear section headings, bullet points, and highlight metrics using bold text. Do not mention system paths, file details, or technical jargon. Keep the tone inspiring, analytical, and tailored to owner Rajan Sharma.
+`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+
+      stepIntervals.forEach(clearTimeout);
+
+      if (!response || !response.text) {
+        throw new Error('AI Generation returned empty results.');
+      }
+
+      setInsights(response.text);
     } catch (err: any) {
-      setError(err.message);
+      stepIntervals.forEach(clearTimeout);
+      setError(err.message || 'AI Generation failed.');
     } finally {
       setLoading(false);
     }

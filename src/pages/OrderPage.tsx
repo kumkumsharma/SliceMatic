@@ -4,7 +4,7 @@ import { validateOrder } from '../utils/validation';
 import { MenuItem } from '../types';
 import { Pizza, CheckCircle, Flame, Plus, Minus, CreditCard, Sparkles, Database, RefreshCw, AlertTriangle, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { isSupabaseConfigured } from '../services/supabaseClient';
+import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 export default function OrderPage() {
   const [menu, setMenu] = useState<{ bases: MenuItem[]; pizzas: MenuItem[]; toppings: MenuItem[] }>({
@@ -43,25 +43,41 @@ export default function OrderPage() {
     setMenuError(null);
     setDbVerified(null);
     try {
-      const res = await fetch('/api/menu');
-      if (res.ok) {
-        const data: MenuItem[] = await res.json();
-        if (!Array.isArray(data) || data.length === 0) {
-          throw new Error('Menu table returned empty or invalid data format. Make sure the database is seeded.');
-        }
-        setMenu({
-          bases: data.filter(i => i.category === 'base' && i.is_active),
-          pizzas: data.filter(i => i.category === 'pizza' && i.is_active),
-          toppings: data.filter(i => i.category === 'topping' && i.is_active)
-        });
-        setDbVerified(true);
-        setDbDetails(`Successfully fetched ${data.length} active menu items dynamically from Supabase.`);
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server responded with status ${res.status}`);
+      console.log('[CLIENT] Loading menu directly from Supabase...');
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error('Supabase client is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
       }
+
+      const { data: supaData, error: supaErr } = await supabase
+        .from('menu')
+        .select('*');
+
+      if (supaErr) {
+        throw new Error(`Direct Supabase Query Failed: ${supaErr.message}`);
+      }
+
+      if (!supaData || supaData.length === 0) {
+        throw new Error('Direct Supabase Query returned 0 menu items. Make sure your menu table is seeded.');
+      }
+
+      const data: MenuItem[] = supaData.map((item: any) => ({
+        id: Number(item.id),
+        category: item.category,
+        name: item.name,
+        price: Number(item.price),
+        is_active: !!item.is_active,
+        created_at: item.created_at
+      }));
+
+      setMenu({
+        bases: data.filter(i => i.category === 'base' && i.is_active),
+        pizzas: data.filter(i => i.category === 'pizza' && i.is_active),
+        toppings: data.filter(i => i.category === 'topping' && i.is_active)
+      });
+      setDbVerified(true);
+      setDbDetails(`Successfully fetched ${data.length} active menu items dynamically from Supabase.`);
     } catch (err: any) {
-      console.error('Failed to load menu:', err);
+      console.error('[CLIENT] Failed to load menu:', err);
       setMenuError(err.message || 'An unexpected database error occurred');
       setDbVerified(false);
     } finally {
@@ -104,44 +120,61 @@ export default function OrderPage() {
       const pizzaItem = menu.pizzas.find(p => p.id.toString() === formData.pizzaId)!;
       const toppingItem = menu.toppings.find(t => t.id.toString() === formData.toppingId)!;
 
-      const orderPayload = {
-        customerName: formData.customerName,
-        phone: formData.phone,
-        subtotal: bill.subtotal,
-        discount: bill.discount,
-        gst: bill.gst,
-        finalTotal: bill.finalTotal,
-        paymentMode: formData.paymentMode,
-        items: [
-          {
-            base_name: baseItem.name,
-            pizza_name: pizzaItem.name,
-            topping_name: toppingItem.name,
-            quantity: formData.quantity,
-            base_price: baseItem.price,
-            pizza_price: pizzaItem.price,
-            topping_price: toppingItem.price
-          }
-        ]
-      };
-
-      console.log('[CLIENT] Submitting order payload:', JSON.stringify(orderPayload, null, 2));
-
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload)
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const serverError = errorData.error || 'Unknown server database error';
-        console.error('[CLIENT] Server returned error during order placement:', serverError);
-        throw new Error(serverError);
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error('Supabase client is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
       }
 
-      const responseData = await res.json();
-      console.log('[CLIENT] Order successfully placed in database. Response:', responseData);
+      // Direct Supabase insert: 
+      // 1. Insert into orders
+      const ordersInsertPayload = {
+        customer_name: formData.customerName,
+        phone: formData.phone,
+        subtotal: parseFloat(bill.subtotal),
+        discount: parseFloat(bill.discount),
+        gst: parseFloat(bill.gst),
+        final_total: parseFloat(bill.finalTotal),
+        payment_mode: formData.paymentMode
+      };
+
+      console.log('[CLIENT DIRECT SUPABASE] Inserting into orders table:', ordersInsertPayload);
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert([ordersInsertPayload])
+        .select()
+        .single();
+
+      if (orderError || !orderData) {
+        throw new Error(`Direct orders insert failed: ${orderError?.message || 'No data returned'} (Code: ${orderError?.code})`);
+      }
+
+      console.log('[CLIENT DIRECT SUPABASE] Successfully inserted order. Inserting items...', orderData);
+
+      // 2. Insert into order_items
+      const itemsInsertPayload = [
+        {
+          order_id: orderData.id,
+          base_name: baseItem.name,
+          pizza_name: pizzaItem.name,
+          topping_name: toppingItem.name,
+          quantity: formData.quantity,
+          base_price: baseItem.price,
+          pizza_price: pizzaItem.price,
+          topping_price: toppingItem.price
+        }
+      ];
+
+      console.log('[CLIENT DIRECT SUPABASE] Inserting into order_items table:', itemsInsertPayload);
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(itemsInsertPayload);
+
+      if (itemsError) {
+        console.error('[CLIENT DIRECT SUPABASE] order_items failed. Rolling back order:', orderData.id);
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw new Error(`Direct order_items insert failed: ${itemsError.message} (Code: ${itemsError.code})`);
+      }
+
+      console.log('[CLIENT] Order successfully placed directly via Supabase. Response:', orderData);
 
       setSuccessMsg(`Order placed successfully! Order total is ₹${bill.finalTotal}.`);
       // Reset form

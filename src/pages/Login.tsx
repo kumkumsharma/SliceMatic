@@ -17,22 +17,15 @@ export default function Login() {
     setError('');
 
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+      if (email === 'admin@slicematic.com' && password === 'password123') {
+        localStorage.setItem('slicematic_admin_token', 'mock-jwt-token-slicematic');
+        localStorage.setItem('slicematic_admin_user', JSON.stringify({ email: 'admin@slicematic.com', name: 'Rajan Sharma' }));
+        
+        // Force page reload to sync Navbar state nicely or navigate
+        window.location.href = '/admin/dashboard';
+      } else {
+        throw new Error('Invalid admin credentials. Use admin@slicematic.com and password123.');
       }
-
-      localStorage.setItem('slicematic_admin_token', data.token);
-      localStorage.setItem('slicematic_admin_user', JSON.stringify(data.user));
-      
-      // Force page reload to sync Navbar state nicely or navigate
-      window.location.href = '/admin/dashboard';
     } catch (err: any) {
       setError(err.message);
     } finally {

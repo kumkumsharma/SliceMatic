@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Order } from '../types';
 import { Search, Calendar, Landmark, ReceiptText, Percent, ShoppingBag, TrendingUp, Sparkles, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -10,12 +11,45 @@ export default function AdminDashboard() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error('Supabase client is not configured.');
       }
-    } catch (err) {
+
+      const { data: supaOrders, error: supaErr } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .order('created_at', { ascending: false });
+
+      if (supaErr) {
+        throw new Error(`Direct Supabase Select Failed: ${supaErr.message}`);
+      }
+
+      const data: Order[] = (supaOrders || []).map((order: any) => ({
+        id: order.id,
+        customer_name: order.customer_name,
+        phone: order.phone,
+        subtotal: Number(order.subtotal),
+        discount: Number(order.discount),
+        gst: Number(order.gst),
+        final_total: Number(order.final_total),
+        payment_mode: order.payment_mode,
+        created_at: order.created_at,
+        order_items: (order.order_items || []).map((item: any) => ({
+          id: Number(item.id),
+          order_id: item.order_id,
+          base_name: item.base_name,
+          pizza_name: item.pizza_name,
+          topping_name: item.topping_name,
+          quantity: Number(item.quantity),
+          base_price: Number(item.base_price),
+          pizza_price: Number(item.pizza_price),
+          topping_price: Number(item.topping_price)
+        }))
+      }));
+
+      console.log(`[CLIENT] Orders successfully loaded directly from Supabase. Count:`, data.length);
+      setOrders(data);
+    } catch (err: any) {
       console.error('Failed to fetch orders:', err);
     } finally {
       setLoading(false);
