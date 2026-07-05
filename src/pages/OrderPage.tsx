@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { calculateBill } from '../utils/calculations';
 import { validateOrder } from '../utils/validation';
 import { MenuItem } from '../types';
-import { Pizza, CheckCircle, Flame, Plus, Minus, CreditCard, Sparkles, Database, RefreshCw, AlertTriangle, Wifi } from 'lucide-react';
+import { Pizza, CheckCircle, Flame, Plus, Minus, CreditCard, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
@@ -31,8 +31,6 @@ export default function OrderPage() {
   // Live database connection states
   const [menuLoading, setMenuLoading] = useState(true);
   const [menuError, setMenuError] = useState<string | null>(null);
-  const [dbVerified, setDbVerified] = useState<boolean | null>(null);
-  const [dbDetails, setDbDetails] = useState<string>('');
 
   useEffect(() => {
     fetchMenu();
@@ -41,7 +39,6 @@ export default function OrderPage() {
   const fetchMenu = async () => {
     setMenuLoading(true);
     setMenuError(null);
-    setDbVerified(null);
     try {
       console.log('[CLIENT] Loading menu directly from Supabase...');
       if (!isSupabaseConfigured || !supabase) {
@@ -74,12 +71,9 @@ export default function OrderPage() {
         pizzas: data.filter(i => i.category === 'pizza' && i.is_active),
         toppings: data.filter(i => i.category === 'topping' && i.is_active)
       });
-      setDbVerified(true);
-      setDbDetails(`Successfully fetched ${data.length} active menu items dynamically from Supabase.`);
     } catch (err: any) {
       console.error('[CLIENT] Failed to load menu:', err);
       setMenuError(err.message || 'An unexpected database error occurred');
-      setDbVerified(false);
     } finally {
       setMenuLoading(false);
     }
@@ -220,72 +214,6 @@ export default function OrderPage() {
           <p className="mt-3 text-lg text-slate-600 max-w-2xl mx-auto">
             Experience premium hand-stretched crusts, slow-cooked visual sauces, and fresh gourmet toppings loaded with taste.
           </p>
-        </div>
-
-        {/* Connection Diagnostics Card */}
-        <div className="bg-white rounded-2xl p-5 mb-8 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start space-x-3.5">
-            <div className={`p-3.5 rounded-xl flex-shrink-0 ${
-              menuLoading 
-                ? 'bg-amber-50 text-amber-500 animate-pulse' 
-                : dbVerified 
-                  ? 'bg-emerald-50 text-emerald-600' 
-                  : 'bg-red-50 text-red-500'
-            }`}>
-              {menuLoading ? (
-                <RefreshCw className="h-5 w-5 animate-spin" />
-              ) : dbVerified ? (
-                <Database className="h-5 w-5" />
-              ) : (
-                <AlertTriangle className="h-5 w-5" />
-              )}
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h4 className="font-bold text-slate-900 text-sm sm:text-base">Supabase Live Connection Diagnostic</h4>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                  dbVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {dbVerified ? 'Connected' : 'Offline / Error'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
-                {menuLoading ? (
-                  <span>Checking database credentials and fetching active recipes...</span>
-                ) : dbVerified ? (
-                  <span>
-                    Verified! Loaded dynamically from the <code className="font-mono bg-slate-100 text-orange-600 px-1 py-0.5 rounded text-[11px]">menu</code> table in Supabase. Absolutely zero mock fallbacks.
-                  </span>
-                ) : (
-                  <span className="text-red-500 font-semibold">
-                    Error loading database: {menuError || 'Connection failed.'} Make sure your Supabase keys are configured in secrets or your .env file.
-                  </span>
-                )}
-              </p>
-              {dbDetails && dbVerified && (
-                <div className="mt-2 text-[11px] font-mono bg-emerald-50/50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-100/50 flex items-center gap-1.5 w-fit">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  {dbDetails}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3 self-end md:self-center">
-            <button
-              onClick={fetchMenu}
-              disabled={menuLoading}
-              className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 active:scale-95 disabled:opacity-50 border border-slate-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${menuLoading ? 'animate-spin' : ''}`} />
-              Test Connection
-            </button>
-            {dbVerified && (
-              <span className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold tracking-wide flex items-center gap-1">
-                <Wifi className="h-3.5 w-3.5" />
-                Live Sync
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Form Grid */}
@@ -480,84 +408,6 @@ export default function OrderPage() {
           {/* Right Sidebar: Receipt Overlay & Interactive Builder */}
           <div className="lg:col-span-5 space-y-6">
             
-            {/* Visual Assembly Canvas */}
-            <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 text-white relative overflow-hidden shadow-xl">
-              <div className="absolute top-0 right-0 p-3 text-slate-700 pointer-events-none">
-                <Pizza className="h-32 w-32 rotate-12 opacity-5" />
-              </div>
-
-              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping"></div>
-                Visual Recipe Assembly
-              </h3>
-
-              <div className="flex flex-col items-center py-6 justify-center space-y-4">
-                <div className="relative w-44 h-44 flex items-center justify-center">
-                  
-                  {/* Overlay Layers */}
-                  <motion.div 
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 40, ease: 'linear' }}
-                    className="absolute inset-0 rounded-full border-4 border-dashed border-orange-900/60 flex items-center justify-center bg-orange-950/20 shadow-inner"
-                  />
-
-                  {/* 1. Crust Layer */}
-                  {formData.baseId ? (
-                    <motion.div 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute w-36 h-36 rounded-full bg-amber-800/85 border-4 border-amber-900 flex items-center justify-center shadow-lg"
-                    >
-                      {/* Crust texture */}
-                      <div className="w-32 h-32 rounded-full border-2 border-dashed border-amber-950/40 opacity-30"></div>
-                    </motion.div>
-                  ) : (
-                    <p className="text-slate-500 text-xs text-center z-10 px-4">Choose a crust base to begin assembling...</p>
-                  )}
-
-                  {/* 2. Pizza Base/Sauce Layer */}
-                  {formData.pizzaId && (
-                    <motion.div 
-                      initial={{ scale: 0, rotate: -45 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      className="absolute w-32 h-32 rounded-full bg-red-600/90 border-2 border-amber-950 flex items-center justify-center z-10 shadow-md"
-                    >
-                      {/* Sauce highlights */}
-                      <div className="absolute inset-2 rounded-full border border-orange-400/40 opacity-40"></div>
-                    </motion.div>
-                  )}
-
-                  {/* 3. Topping Layer */}
-                  {formData.toppingId && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="absolute w-28 h-28 flex flex-wrap justify-center items-center gap-2 z-20"
-                    >
-                      {/* Topping markers */}
-                      {[...Array(6)].map((_, i) => (
-                        <div key={i} className="w-3.5 h-3.5 rounded-full bg-yellow-400 border border-yellow-600 shadow-sm flex items-center justify-center animate-bounce" style={{ animationDelay: `${i * 150}ms` }}>
-                          <span className="w-1.5 h-1.5 bg-yellow-800 rounded-full"></span>
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
-                </div>
-
-                <div className="text-center mt-3 space-y-1">
-                  <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Active Recipe Build</p>
-                  <p className="text-sm font-bold text-slate-100">
-                    {selectedPizza ? selectedPizza.name : 'Choose Sauce'} on {selectedBase ? selectedBase.name : 'Choose Crust'}
-                  </p>
-                  {selectedTopping && (
-                    <p className="text-xs text-orange-400 font-semibold">
-                      Loaded with {selectedTopping.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {/* Dash Border Bill Ticket */}
             <div className="bg-[#fffdf9] border-2 border-dashed border-orange-400 rounded-2xl p-6 shadow-lg text-slate-800 relative">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-3 bg-orange-100 border border-orange-300 text-orange-800 font-mono text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">

@@ -80,9 +80,6 @@ export default function AdminDashboard() {
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight font-sans flex items-center gap-2">
               SliceMatic Dashboard
-              <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Live Connection
-              </span>
             </h1>
             <p className="mt-1.5 text-sm text-slate-500">
               Real-time order logging, POS operations monitoring, and live audit trailing.
