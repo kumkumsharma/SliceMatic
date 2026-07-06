@@ -22,8 +22,49 @@ import {
   Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type } from '@google/genai';
 import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
+
+async function callOpenRouter(systemPrompt: string, prompt: string): Promise<string> {
+  const apiKey = (import.meta as any).env.VITE_OPENROUTER_API_KEY || 
+                 (import.meta as any).env.OPENROUTER_API_KEY || 
+                 (window as any).OPENROUTER_API_KEY || 
+                 (window as any).VITE_OPENROUTER_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('OpenRouter API key is not configured. Please define OPENROUTER_API_KEY in your secrets or environment.');
+  }
+
+  // Uses openai/gpt-4o-mini as standard GPT-4o mini on OpenRouter (satisfies openai/gpt-4.1-mini)
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://ai.studio/build',
+      'X-Title': 'SliceMatic POS'
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API request failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  if (!data.choices || data.choices.length === 0) {
+    throw new Error('Invalid response structure received from OpenRouter.');
+  }
+
+  return data.choices[0].message.content;
+}
 
 interface ReportData {
   healthScore: number;
@@ -179,54 +220,7 @@ export default function AIInsights() {
         is_active: m.is_active
       }));
 
-      // Connect with Gemini API
-      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('Gemini API key is not configured. Please define VITE_GEMINI_API_KEY.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          businessImpact: {
-            type: Type.STRING,
-            description: "Detailed evaluation of how this specific simulation affects pricing structures, order volumes, and financial performance."
-          },
-          customerImpact: {
-            type: Type.STRING,
-            description: "Analysis of consumer behavior change, demand friction, and transaction rate shifts."
-          },
-          risks: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Exactly 3 clear business or operational risks of this change."
-          },
-          benefits: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Exactly 3 clear business or operational advantages of this change."
-          },
-          recommendation: {
-            type: Type.STRING,
-            description: "Direct, professional consultant advice on how and whether Rajan should execute this proposal."
-          },
-          confidenceLevel: {
-            type: Type.STRING,
-            description: "One of: 'High', 'Medium', 'Low'."
-          }
-        },
-        required: [
-          "businessImpact",
-          "customerImpact",
-          "risks",
-          "benefits",
-          "recommendation",
-          "confidenceLevel"
-        ]
-      };
-
+      // Connect with OpenRouter LLM
       const systemPrompt = `You are an expert restaurant business growth consultant. 
 Your job is to analyze 'what-if' tactical and strategic proposal questions from Rajan, the restaurant owner.
 Do NOT give generic business advice. You MUST heavily customize and ground your predictions in the provided active menu items, pricing structure, total revenue, average order value, popular pizzas, and payment methods. Provide precise projections where possible.`;
@@ -250,24 +244,26 @@ Rajan's proposed tactical change: "${queryToUse}"
 Here are the real-time restaurant statistics and configurations for context:
 ${JSON.stringify(statsContext)}
 
-Analyze this proposed change. Give a structured response adhering strictly to the JSON schema requested.
+Analyze this proposed change. Give a structured JSON response adhering strictly to the schema requested.
+
+Your JSON response must follow this schema exactly:
+{
+  "businessImpact": "Detailed evaluation of how this specific simulation affects pricing structures, order volumes, and financial performance.",
+  "customerImpact": "Analysis of consumer behavior change, demand friction, and transaction rate shifts.",
+  "risks": ["Exactly 3 clear business or operational risks of this change as strings"],
+  "benefits": ["Exactly 3 clear business or operational advantages of this change as strings"],
+  "recommendation": "Direct, professional consultant advice on how and whether Rajan should execute this proposal.",
+  "confidenceLevel": "One of: 'High', 'Medium', 'Low'."
+}
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: prompt,
-        config: {
-          systemInstruction: systemPrompt,
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
-        }
-      });
+      const rawResponseText = await callOpenRouter(systemPrompt, prompt);
 
-      if (!response || !response.text) {
+      if (!rawResponseText) {
         throw new Error('Empty response from AI simulator.');
       }
 
-      const parsed = JSON.parse(response.text.trim()) as WhatIfReport;
+      const parsed = JSON.parse(rawResponseText.trim()) as WhatIfReport;
       setWhatIfReport(parsed);
 
     } catch (err: any) {
@@ -281,7 +277,7 @@ Analyze this proposed change. Give a structured response adhering strictly to th
     'Aggregating live transactions & recipe histories...',
     'Computing topping attachment & revenue concentration...',
     'Evaluating payment distribution metrics...',
-    'Consulting Gemini AI Business Coach models...'
+    'Consulting AI Business Coach models...'
   ];
 
   const generateCoachInsights = async () => {
@@ -424,82 +420,7 @@ Analyze this proposed change. Give a structured response adhering strictly to th
 
       setStats(calculatedStats);
 
-      // 3. Connect with Gemini API
-      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('Gemini API key is not configured. Please define VITE_GEMINI_API_KEY.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          healthScore: {
-            type: Type.INTEGER,
-            description: "An overall health score for the restaurant from 0 to 100."
-          },
-          businessRating: {
-            type: Type.STRING,
-            description: "A short phrase reflecting the health score (e.g., Good, Excellent, Fair, Critical)."
-          },
-          scoreExplanation: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Exactly 4 high-impact bullet points explaining why the business got this score. Include data facts."
-          },
-          executiveSummary: {
-            type: Type.STRING,
-            description: "A concise 2-sentence executive summary of operational recommendations."
-          },
-          strengths: {
-            type: Type.ARRAY,
-            description: "Exactly 3 distinct business strengths.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING, description: "Actionable name of strength." },
-                description: { type: Type.STRING, description: "Detailed metric-backed reason." }
-              },
-              required: ["title", "description"]
-            }
-          },
-          weaknesses: {
-            type: Type.ARRAY,
-            description: "Exactly 3 distinct business weaknesses.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING, description: "Actionable name of weakness." },
-                description: { type: Type.STRING, description: "Detailed metric-backed reason." }
-              },
-              required: ["title", "description"]
-            }
-          },
-          recommendations: {
-            type: Type.ARRAY,
-            description: "Exactly 3 highly actionable, specific recommendations.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING, description: "Clear, practical action title." },
-                description: { type: Type.STRING, description: "Direct implementation blueprint based on statistical numbers." }
-              },
-              required: ["title", "description"]
-            }
-          }
-        },
-        required: [
-          "healthScore",
-          "businessRating",
-          "scoreExplanation",
-          "executiveSummary",
-          "strengths",
-          "weaknesses",
-          "recommendations"
-        ]
-      };
-
+      // 3. Connect with OpenRouter LLM
       const systemPrompt = `You are an experienced restaurant business consultant.
 Analyze the restaurant statistics.
 Return:
@@ -525,25 +446,69 @@ Please analyze the following restaurant metrics for SliceMatic Pizza:
 - Operational Payment Modes: ${JSON.stringify(paymentModeDistribution)}
 
 Return the analysis in JSON format adhering strictly to the response schema requested.
+
+Your JSON response must follow this schema exactly:
+{
+  "healthScore": 85,
+  "businessRating": "Good",
+  "scoreExplanation": [
+    "Exactly 4 high-impact bullet points explaining why the business got this score. Include data facts."
+  ],
+  "executiveSummary": "A concise 2-sentence executive summary of operational recommendations.",
+  "strengths": [
+    {
+      "title": "Actionable name of strength 1",
+      "description": "Detailed metric-backed reason."
+    },
+    {
+      "title": "Actionable name of strength 2",
+      "description": "Detailed metric-backed reason."
+    },
+    {
+      "title": "Actionable name of strength 3",
+      "description": "Detailed metric-backed reason."
+    }
+  ],
+  "weaknesses": [
+    {
+      "title": "Actionable name of weakness 1",
+      "description": "Detailed metric-backed reason."
+    },
+    {
+      "title": "Actionable name of weakness 2",
+      "description": "Detailed metric-backed reason."
+    },
+    {
+      "title": "Actionable name of weakness 3",
+      "description": "Detailed metric-backed reason."
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "Clear, practical action title 1",
+      "description": "Direct implementation blueprint based on statistical numbers."
+    },
+    {
+      "title": "Clear, practical action title 2",
+      "description": "Direct implementation blueprint based on statistical numbers."
+    },
+    {
+      "title": "Clear, practical action title 3",
+      "description": "Direct implementation blueprint based on statistical numbers."
+    }
+  ]
+}
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: prompt,
-        config: {
-          systemInstruction: systemPrompt,
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
-        }
-      });
+      const rawResponseText = await callOpenRouter(systemPrompt, prompt);
 
       stepIntervals.forEach(clearTimeout);
 
-      if (!response || !response.text) {
+      if (!rawResponseText) {
         throw new Error('Empty response from AI engine.');
       }
 
-      const parsedData = JSON.parse(response.text.trim()) as ReportData;
+      const parsedData = JSON.parse(rawResponseText.trim()) as ReportData;
       setReport(parsedData);
 
     } catch (err: any) {
@@ -580,7 +545,7 @@ Return the analysis in JSON format adhering strictly to the response schema requ
               AI Business Coach
             </h1>
             <p className="text-sm sm:text-lg text-orange-50 max-w-3xl font-medium leading-relaxed">
-              Meet your expert virtual restaurant consultant. Powered by Google Gemini, the AI Business Coach aggregates real-time transactional data, calculates diagnostic KPIs, and generates personalized, data-backed operational game plans.
+              Meet your expert virtual restaurant consultant. Powered by OpenRouter LLM, the AI Business Coach aggregates real-time transactional data, calculates diagnostic KPIs, and generates personalized, data-backed operational game plans.
             </p>
 
             <div className="pt-4">
@@ -621,7 +586,7 @@ Return the analysis in JSON format adhering strictly to the response schema requ
               
               <h3 className="font-extrabold text-slate-800 text-xl tracking-tight">Consulting AI Business Coach</h3>
               <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto leading-relaxed">
-                Rajan's digital assistant is loading transactional metrics and invoking Gemini models to evaluate restaurant viability...
+                Rajan's digital assistant is loading transactional metrics and invoking AI Business Coach models to evaluate restaurant viability...
               </p>
 
               {/* Progress Steps UI */}
@@ -680,7 +645,7 @@ Return the analysis in JSON format adhering strictly to the response schema requ
               </div>
               <h3 className="font-extrabold text-slate-800 text-xl tracking-tight">Active Business Coach Awaiting Initialization</h3>
               <p className="text-slate-500 text-sm mt-3 max-w-md mx-auto leading-relaxed">
-                Click the button above to dynamically load your sales database, calculate performance metrics, and build a full coaching plan using the live Gemini 3.5 model.
+                Click the button above to dynamically load your sales database, calculate performance metrics, and build a full coaching plan using the live OpenRouter LLM.
               </p>
             </motion.div>
           )}
@@ -921,7 +886,7 @@ Return the analysis in JSON format adhering strictly to the response schema requ
                     What-if Simulator
                   </h2>
                   <p className="text-slate-500 text-xs sm:text-sm mt-1">
-                    Simulate tactical business changes. Gemini analyzes your menu, orders, and payment shares to predict custom business and customer impacts.
+                    Simulate tactical business changes. The AI Business Intelligence Engine analyzes your menu, orders, and payment shares to predict custom business and customer impacts.
                   </p>
                 </div>
               </div>
