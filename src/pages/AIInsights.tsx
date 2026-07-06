@@ -25,45 +25,26 @@ import { motion, AnimatePresence } from 'motion/react';
 import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 async function callOpenRouter(systemPrompt: string, prompt: string): Promise<string> {
-  const apiKey = (import.meta as any).env.VITE_OPENROUTER_API_KEY || 
-                 (import.meta as any).env.OPENROUTER_API_KEY || 
-                 (window as any).OPENROUTER_API_KEY || 
-                 (window as any).VITE_OPENROUTER_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('OpenRouter API key is not configured. Please define OPENROUTER_API_KEY in your secrets or environment.');
-  }
-
-  // Uses openai/gpt-4o-mini as standard GPT-4o mini on OpenRouter (satisfies openai/gpt-4.1-mini)
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch('/api/ai/completion', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://ai.studio/build',
-      'X-Title': 'SliceMatic POS'
     },
-    body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' }
-    })
+    body: JSON.stringify({ systemPrompt, prompt })
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenRouter API request failed: ${response.status} - ${errorText}`);
+    const errorData = await response.json().catch(() => ({}));
+    const errorMsg = errorData.error || `HTTP error ${response.status}`;
+    throw new Error(`AI Request failed: ${errorMsg}`);
   }
 
   const data = await response.json();
-  if (!data.choices || data.choices.length === 0) {
-    throw new Error('Invalid response structure received from OpenRouter.');
+  if (data.error) {
+    throw new Error(data.error);
   }
 
-  return data.choices[0].message.content;
+  return data.content;
 }
 
 interface ReportData {
