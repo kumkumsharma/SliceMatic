@@ -95,9 +95,55 @@ export default function AIInsights() {
     const queryToUse = customQuery || whatIfQuery;
     if (!queryToUse.trim()) return;
 
-    setWhatIfLoading(true);
-    setWhatIfError('');
     setWhatIfReport(null);
+    setWhatIfError('');
+
+    const trimmedQuery = queryToUse.trim();
+    const lowercaseQuery = trimmedQuery.toLowerCase();
+
+    // Must start with "what if" (case-insensitive)
+    const startsWithWhatIf = lowercaseQuery.startsWith('what if');
+
+    // Business decision keywords
+    const businessKeywords = [
+      'increase', 'decrease', 'raise', 'lower', 'change', 'reduce', 'add', 'remove', 'delete', 
+      'introduce', 'offer', 'give', 'sell', 'stop', 'start', 'discount', 'price', 'charge', 'cost', 
+      'menu', 'pizza', 'topping', 'item', 'coupon', 'promo', 'off', 'percent', '%', 'rupees', '₹', 'rs', 
+      'hour', 'time', 'open', 'close', 'hire', 'fire', 'staff', 'delivery', 'deliver', 'payment', 'cash', 'card', 'upi',
+      'buy', 'get', 'free', 'viability', 'strategy', 'marketing', 'advertise', 'spend'
+    ];
+
+    const hasBusinessDecision = businessKeywords.some(keyword => lowercaseQuery.includes(keyword));
+
+    // Must not be a factual database question
+    const isFactualQuestion = 
+      lowercaseQuery.includes('what is') || 
+      lowercaseQuery.includes('what are') || 
+      lowercaseQuery.includes('how many') || 
+      lowercaseQuery.includes('how much') || 
+      lowercaseQuery.includes('show me') || 
+      lowercaseQuery.includes('list') || 
+      lowercaseQuery.includes('who is') || 
+      lowercaseQuery.includes('where is') ||
+      lowercaseQuery.includes('table') ||
+      lowercaseQuery.includes('database') ||
+      lowercaseQuery.includes('records') ||
+      lowercaseQuery.includes('best seller') ||
+      lowercaseQuery.includes('most popular') ||
+      lowercaseQuery.includes('least popular') ||
+      lowercaseQuery.includes('total orders') ||
+      lowercaseQuery.includes('total revenue') ||
+      lowercaseQuery.includes('average order') ||
+      lowercaseQuery.includes('active menu') ||
+      lowercaseQuery.includes('current menu') ||
+      lowercaseQuery.includes('sales');
+
+    if (!startsWithWhatIf || !hasBusinessDecision || isFactualQuestion) {
+      setWhatIfError('This simulator evaluates future business scenarios only. Please ask a hypothetical business question such as "What if I increase Cheese Burst price by ₹20?"');
+      return;
+    }
+
+    setWhatIfLoading(true);
 
     try {
       if (!isSupabaseConfigured || !supabase) {
