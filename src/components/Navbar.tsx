@@ -73,7 +73,7 @@ export default function Navbar() {
                   }`}
                 >
                   <Sparkles className="h-4 w-4" />
-                  <span>AI Insights</span>
+                  <span>AI Business Coach</span>
                 </Link>
 
                 <button

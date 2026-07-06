@@ -96,7 +96,7 @@ export default function AdminDashboard() {
               href="/ai-insights"
               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-95 text-white text-sm font-bold rounded-xl shadow-md shadow-orange-500/15 transition-all flex items-center gap-1.5"
             >
-              <Sparkles className="h-4 w-4" /> AI Insights Report
+              <Sparkles className="h-4 w-4" /> AI Business Coach
             </a>
           </div>
         </div>
