@@ -1,20 +1,101 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# SliceMatic -- AI Powered Pizza Ordering System
 
-# Run and deploy your AI Studio app
+## Overview
 
-This contains everything you need to run your app locally.
+SliceMatic is an AI-powered pizza ordering application built for Rajan's
+pizza business as part of the FDE Assignment.
 
-View your app in AI Studio: https://ai.studio/apps/36b7bb1e-b5a4-4ab5-bf96-c04cdbf4ecef
+The application replaces manual Google Form ordering with a modern
+ordering system featuring: - Dynamic menu from Supabase - Customer input
+validation - Automatic GST and discount calculation - Secure Admin Login
+using Supabase Authentication - Order storage in Supabase - AI Business
+Coach - AI What-if Simulator powered by OpenRouter
 
-## Run Locally
+------------------------------------------------------------------------
 
-**Prerequisites:**  Node.js
+## Features
 
+### Customer
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+-   Browse menu from Supabase
+-   Place pizza orders
+-   Automatic bill calculation
+-   GST & discount calculation
+-   Input validation
+-   Order confirmation
+
+### Admin
+
+-   Secure login
+-   Protected dashboard
+-   View all orders
+-   Business analytics
+
+### AI Features
+
+#### AI Business Coach
+
+-   Business Health Score
+-   Executive Summary
+-   Strengths & Weaknesses
+-   Personalized business recommendations
+
+#### AI What-if Simulator
+
+-   Simulate pricing changes
+-   Evaluate promotional offers
+-   Predict business impact
+-   Data-driven recommendations
+
+------------------------------------------------------------------------
+
+## Tech Stack
+
+  Layer            Technology
+  ---------------- ---------------------------
+  Frontend         React + TypeScript + Vite
+  Backend          Node.js
+  Database         Supabase
+  Authentication   Supabase Auth
+  AI               OpenRouter
+  Deployment       Vercel
+
+------------------------------------------------------------------------
+
+## Environment Variables
+
+``` env
+OPENROUTER_API_KEY=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+------------------------------------------------------------------------
+
+## Installation
+
+``` bash
+npm install
+npm run dev
+```
+
+------------------------------------------------------------------------
+
+## Deployment
+
+The application is deployed on **Vercel**.
+
+------------------------------------------------------------------------
+
+## Future Enhancements
+
+-   Inventory Management
+-   Loyalty Program
+-   Multi-Branch Support
+-   Demand Forecasting
+
+------------------------------------------------------------------------
+
+## Author
+
+**Kumkum Sharma**
